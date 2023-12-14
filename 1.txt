@@ -1,0 +1,215 @@
+ private async void Login()
+        {
+
+            Log.Add($"Login", Color.Yellow);
+
+            DumpText("GET: https://irtoto.com/", Color.Silver);
+            Navigate("https://irtoto.com/");
+            DumpText("GET: https://irtoto.com/Login/Login", Color.Silver);
+            Navigate("https://irtoto.com/Login/Login");
+
+
+            var user = Globals.Settings.Username;
+            var pass = Globals.Settings.Password;
+
+
+            if (user == "username" && pass == "password")
+                return;
+
+
+            Log.Add($"Logging in with: {user} | {pass}", Color.Yellow);
+
+
+            //if (Globals.Settings.Credentials1)
+            //{
+            //    user = Globals.Settings.Username1;
+            //    pass = Globals.Settings.Password1;
+            //}
+            //if (Globals.Settings.Credentials2)
+            //{
+            //    user = Globals.Settings.Username2;
+            //    pass = Globals.Settings.Password2;
+            //}
+            DumpText("Waiting to send login credentials...", Color.Silver);
+            _browser.ExecuteScriptAsyncWhenPageLoaded($"document.getElementById('email').value='{user}';");
+            _browser.ExecuteScriptAsyncWhenPageLoaded($"document.getElementById('password').value='{pass}';");
+            _browser.ExecuteScriptAsyncWhenPageLoaded("document.getElementById('loginForm').submit();");
+            try
+            {
+                var submit = "//*[@id=\"staticLoginButton\"]";
+                Driver.FindElement(By.XPath(submit)).Click();
+                DumpText("Successfully logged in...", Color.Yellow);
+            }
+            catch (Exception ex)
+            {
+                DumpText($"{ex}", Color.Red);
+            }
+            DumpText("Waiting to load skillgames...", Color.Yellow);
+            await LoadSkillGames();
+            DumpText("Loaded.", Color.FromArgb(159, 239, 0)); ;
+
+        }
+
+        private async Task LoadSkillGames()
+        {
+            await _browser.LoadUrlAsync("https://irtoto.com/en/Skillgames");
+            Navigate("https://irtoto.com/en/Skillgames");
+        }
+        // 
+        public void Navigate(string URL) => Driver.Url = URL;
+
+
+        #region | Logging |
+
+        public void Write(string value, Color color) => this.InvokeOnUiThreadIfRequired(() => Log.Write(value, color));
+        public void AddLog(string value, Color color) => this.InvokeOnUiThreadIfRequired(() => Log.Add(value, color));
+
+        #endregion
+
+        #region | Min, Max, Exit |
+
+        private void ExitBtn_Click(object sender, EventArgs e) => Environment.Exit(0);
+        private void MaxBtn_Click(object sender, EventArgs e) => WindowState = WindowState == FormWindowState.Normal ? FormWindowState.Maximized : FormWindowState.Normal;
+        private void MinBtn_Click(object sender, EventArgs e) => WindowState = FormWindowState.Minimized;
+
+        #endregion
+
+        #region | Onpaint, Resize, Buffering etc |
+
+        #region Imports
+        public const int WM_NCLBUTTONDOWN = 0xA1;
+        public const int HT_CAPTION = 0x2;
+
+        [DllImportAttribute("user32.dll")]
+        public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+
+        [DllImportAttribute("user32.dll")]
+        public static extern bool ReleaseCapture();
+
+        [DllImport("user32.dll", EntryPoint = "LoadCursorFromFile")]
+        private static extern IntPtr LoadCursorFromFile(string fileName);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetCursorPos(out Point pt);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool ScreenToClient(IntPtr hWnd, ref Point pt);
+        #endregion
+
+        #region Resize grip at bottom right
+
+        private static int GripSize = 16;      // Grip size
+        private static int CaptionSize = 32;   // Caption bar height;
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            ControlPaint.DrawSizeGrip(e.Graphics, this.BackColor, new Rectangle(this.ClientSize.Width - GripSize, this.ClientSize.Height - GripSize, GripSize, GripSize));
+
+            if (WindowState != FormWindowState.Maximized)
+            {
+                Rectangle rc = new Rectangle(this.ClientSize.Width - GripSize, this.ClientSize.Height - GripSize, GripSize, GripSize);
+                ControlPaint.DrawSizeGrip(e.Graphics, this.BackColor, rc);
+                ControlPaint.DrawBorder(e.Graphics, rc, Color.Transparent, ButtonBorderStyle.None);
+                //this.Controls.SetChildIndex(this, 0);
+            }
+
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+
+            try
+            {
+                if (m.Msg == 0x84)
+                {
+                    Point pos = this.PointToClient(new Point(m.LParam.ToInt32()));
+
+                    if (pos.X >= this.ClientSize.Width - GripSize && pos.Y >= this.ClientSize.Height - GripSize)
+                    {
+                        m.Result = (IntPtr)17; // HTBOTTOMRIGHT
+                        return;
+                    }
+
+                    if (pos.Y < CaptionSize)
+                    {
+                        m.Result = (IntPtr)2; // HTCAPTION
+                        return;
+                    }
+                }
+
+                base.WndProc(ref m);
+            }
+            catch
+            {
+
+            }
+
+        }
+
+        private void Main_MouseMove(object sender, MouseEventArgs e)
+        {
+            //IntPtr hCursor = LoadCursorFromFile(Application.StartupPath + "\\Resources\\ResizeCur.cur");
+            //Cursor.Current = new Cursor(hCursor);
+
+
+            Point pt;
+            GetCursorPos(out pt);
+            ScreenToClient(this.Handle, ref pt);
+
+            if (WindowState != FormWindowState.Maximized && pt.X >= this.ClientSize.Width - GripSize && pt.Y >= this.ClientSize.Height - GripSize)
+            {
+                System.Windows.Forms.Cursor.Current = Cursors.SizeNWSE;
+            }
+        }
+
+
+        private const int cGrip = 16; // Grip size
+        private const int cCaption = 32; // Caption bar height;
+
+        private void Main_MouseLeave(object sender, EventArgs e)
+        {
+            System.Windows.Forms.Cursor.Current = Cursors.Default;
+        }
+
+        private void Main_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                if (e.Location.X < this.ClientSize.Width - 10 && e.Location.Y < this.ClientSize.Height - 10)
+                {
+                    ReleaseCapture();
+                    SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
+                }
+            }
+
+            if (WindowState != FormWindowState.Maximized && e.Button == MouseButtons.Left && new Rectangle(this.ClientSize.Width - GripSize, this.ClientSize.Height - GripSize, GripSize, GripSize).Contains(e.Location))
+            {
+                ReleaseCapture();
+                SendMessage(this.Handle, 0xA1, 0x2, 0);
+            }
+        }
+
+
+
+
+        #endregion
+
+        #endregion
+
+        #region | Opacity |
+
+        private void Main_Activated(object sender, EventArgs e) => this.InvokeOnUiThreadIfRequired(() => base.Opacity = 1);
+
+        private void Main_Deactivate(object sender, EventArgs e) => this.InvokeOnUiThreadIfRequired(() => base.Opacity = 0.90);
+
+
+
+
+
+        #endregion
+
+        private void DevToolsBtn_Click(object sender, EventArgs e) => _browser.ShowDevTools();
+
+        private void ViewSourceBtn_Click(object sender, EventArgs e) => _browser.ViewSource();
